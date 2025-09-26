@@ -1,4 +1,4 @@
-    const ai = {
+    let ai = {
         model: '@cf/meta/llama-3.1-70b-instruct',
         temperature: 1.7,
         maxTokens: null,
@@ -16,21 +16,28 @@
         message: null,
         response: null
     };
-            async askAi(systemPrompt, message, maxTokenOutput=50) {
-                if (!message || !systemPrompt || !maxTokenOutput) { console.error('AI Error: required argument(s) missing'); return; }
-                if (maxTokenOutput < 50) maxTokenOutput = 50;
-                
-                ai.maxTokens = maxTokenOutput;
-                ai.systemPrompt = systemPrompt;
-                ai.message = message;
-                
-                try {
-                    response = await callCloudflareAPI();
-                    return response;
-                } catch (error) {
-                    console.error('AI Error:', error);
-                }
-            }
+            async function askAi(systemPrompt, message, maxTokenOutput = 50) {
+  if (!message || !systemPrompt || !maxTokenOutput) {
+    console.error('AI Error: required argument(s) missing');
+    return;
+  }
+
+  if (maxTokenOutput < 50) {
+    maxTokenOutput = 50;
+  }
+
+  ai.maxTokens = maxTokenOutput;
+  ai.systemPrompt = systemPrompt;
+  ai.message = message;
+
+  try {
+    const response = await callCloudflareAPI();
+    return response;
+  } catch (error) {
+    console.error('AI Error:', error);
+    return null;
+  }
+}
             
 async callCloudflareAPI(useFallback = false) {
     const apiUrl = ai.baseApiUrl + ai.model;
@@ -136,4 +143,4 @@ async callCloudflareAPI(useFallback = false) {
             // Re-throw the original error if not a 400 or if fallback wasn't attempted
             throw error;
         }
-    }ript>
+    }
