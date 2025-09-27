@@ -7,7 +7,6 @@ let ai = {
     repetitionPenalty: 1.1,
     frequencyPenalty: 0.0,
     presencePenalty: 0.0,
-    seed: null,
     responseFormat: 'text',
     streamResponse: false,
     systemPrompt: null,
