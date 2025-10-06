@@ -1,318 +1,308 @@
-// overlay.js — CDN-friendly, sandboxed Eaglercraft overlay (safe for educational use)
-//
-// - Host this file (GitHub Pages, jsDelivr, your server) and include via <script src="..."></script>
-// - The sandbox executes user code inside an iframe and communicates via postMessage.
-// - The parent enforces a whitelist of actions the sandbox may request.
+/* eagler-probe-overlay.js
+   Non-invasive probe + safe overlay for private Eaglercraft builds.
+   - Requires: window.__EAGLER_ALLOW_INTERNALS = true (set in index.html before this script)
+   - Exposes: window.__EAGLER_CLIENT_API (best-effort)
+   - Safety: read-first; setLocalFov is visual-only (no networking).
+*/
 
-(function () {
-  if (window.__EAGLER_SAFE_OVERLAY_LOADED) return;
-  window.__EAGLER_SAFE_OVERLAY_LOADED = true;
+(function(){
+  if (window.__EAGLER_PROBE_OVERLAY_LOADED) return;
+  window.__EAGLER_PROBE_OVERLAY_LOADED = true;
 
-  const PREFIX = "eagler:script:";
-  const PANEL_Z = 999999;
+  // ---------------- Utilities ----------------
+  function once(fn){ let done=false; return (...a)=>{ if(done) return; done=true; return fn(...a); }; }
+  function el(tag, attrs={}, txt){ const e=document.createElement(tag); for(const k in attrs){ if(k==='style') Object.assign(e.style, attrs[k]); else e.setAttribute(k, attrs[k]); } if(txt!==undefined) e.textContent = txt; return e; }
+  function safe(fn){ try{ return fn(); }catch(e){ console.warn(e); return null; } }
 
-  // --- Small utilities ---
-  function q(tag, attrs = {}, text) {
-    const el = document.createElement(tag);
-    for (const k in attrs) {
-      if (k === "style") Object.assign(el.style, attrs[k]);
-      else el.setAttribute(k, attrs[k]);
+  // ---------------- Probe shim (Option B, best-effort) ----------------
+  function tryWrapTick(client, api){
+    try {
+      if (client && typeof client.tick === "function" && !client.__eagler_tick_wrapped) {
+        const orig = client.tick;
+        client.tick = function(){ const t0=performance.now(); try{ orig.apply(this, arguments);}catch(e){ try{ orig.call(this);}catch(e){} } const t1=performance.now(); const dt=Math.min(t1-t0,200); if(api && typeof api._dispatchTick==='function') api._dispatchTick(dt); };
+        client.__eagler_tick_wrapped = true;
+        return true;
+      }
+    } catch(e){}
+    return false;
+  }
+
+  function makeApi(client){
+    if (window.__EAGLER_CLIENT_API) return window.__EAGLER_CLIENT_API;
+    const api = {
+      version: "0.1",
+      // best-effort read-only snapshot of player
+      getPlayerState: function(){
+        try {
+          const p = client && (client.player || client.thePlayer || (client.getPlayer && client.getPlayer()));
+          if(!p) return null;
+          return {
+            id: p.id || p.uuid || null,
+            name: p.name || (p.getName && p.getName && p.getName()) || null,
+            pos: {
+              x: (p.posX !== undefined ? p.posX : (p.x !== undefined ? p.x : null)),
+              y: (p.posY !== undefined ? p.posY : (p.y !== undefined ? p.y : null)),
+              z: (p.posZ !== undefined ? p.posZ : (p.z !== undefined ? p.z : null))
+            },
+            onGround: !!(p.onGround || (typeof p.isOnGround === 'function' ? p.isOnGround() : false)),
+            health: (p.getHealth ? p.getHealth() : (p.health !== undefined ? p.health : null)),
+            yaw: (p.rotationYaw !== undefined ? p.rotationYaw : (p.yaw !== undefined ? p.yaw : null)),
+            pitch: (p.rotationPitch !== undefined ? p.rotationPitch : (p.pitch !== undefined ? p.pitch : null))
+          };
+        } catch(e){ console.warn("getPlayerState failed", e); return null; }
+      },
+      getWorldInfo: function(){
+        try {
+          const w = client && (client.world || client.theWorld || null);
+          if(!w) return null;
+          return {
+            time: (w.getWorldTime ? w.getWorldTime() : (w.time !== undefined ? w.time : null)),
+            dim: (w.provider && (w.provider.getDimension ? w.provider.getDimension() : (w.dimension || null))) || null
+          };
+        } catch(e){ console.warn("getWorldInfo failed", e); return null; }
+      },
+
+      // subscribe/unsubscribe tick handlers (handlers run in page context)
+      subscribeTick: function(handler){
+        if(typeof handler !== 'function') return null;
+        api._tickSubs = api._tickSubs || [];
+        const id = Math.random().toString(36).slice(2,9);
+        api._tickSubs.push({ id, handler });
+        return id;
+      },
+      unsubscribeTick: function(id){
+        api._tickSubs = (api._tickSubs || []).filter(x=>x.id !== id);
+      },
+
+      // visual-only FOV setter: try to set on client if available, otherwise use canvas-scale fallback
+      setLocalFov: function(fov){
+        try {
+          // clamp plausible values
+          if (typeof fov !== 'number') return false;
+          if (fov < 10) fov = 10;
+          if (fov > 170) fov = 170;
+
+          // Try known client fields: options.fov or gameSettings.fov
+          const options = client && (client.options || client.gameSettings || null);
+          if (options && ('fov' in options || 'getFov' in options || 'setFov' in options)) {
+            if ('fov' in options) { options.fov = fov; return true; }
+            if (typeof options.setFov === 'function') { options.setFov(fov); return true; }
+          }
+          // Some builds store weapons/camera on client.renderManager or client.entityRenderer
+          if (client && client.entityRenderer && typeof client.entityRenderer.setFOV === 'function') {
+            try { client.entityRenderer.setFOV(fov); return true; } catch(e) {}
+          }
+
+          // Fallback: apply a non-authoritative visual transform on the <canvas> element
+          const canvas = document.querySelector('canvas');
+          if (canvas) {
+            // map fov to CSS scale roughly: higher fov -> smaller scale, lower fov -> zoom in
+            // this is approximate and purely visual
+            const scale = Math.max(0.6, Math.min(1.6, 75 / fov)); // 75 is default-ish
+            canvas.style.transformOrigin = '50% 50%';
+            canvas.style.transition = 'transform 150ms linear';
+            canvas.style.transform = `scale(${scale})`;
+            // annotate current fallback fov for awareness
+            canvas.dataset.__eagler_fov = String(fov);
+            return true;
+          }
+          return false;
+        } catch(e){ console.warn("setLocalFov failed", e); return false; }
+      },
+
+      clientLog: function(msg){
+        try { console.log("[EAGLER_CLIENT_API] " + String(msg)); }catch(e){}
+      },
+
+      // internal dispatcher called when we wrap the client's tick loop or poll fallback
+      _dispatchTick: function(dt){
+        try {
+          const arr = api._tickSubs || [];
+          for(let i=0;i<arr.length;i++){
+            try { arr[i].handler(dt); } catch(e){ console.warn("tick handler error", e); }
+          }
+        } catch(e){ console.warn("_dispatchTick error", e); }
+      }
+    };
+
+    // freeze to avoid overwriting by accident
+    Object.defineProperty(window, "__EAGLER_CLIENT_API", { value: api, writable: false, configurable: false });
+    return api;
+  }
+
+  // Probe heuristics
+  function probeForClient(){
+    const candidates = [];
+    try {
+      // common names
+      candidates.push(window.game);
+      candidates.push(window.client);
+      candidates.push(window.minecraft);
+      candidates.push(window.MinecraftClient);
+      candidates.push(window._minecraftClient);
+      // also scan window for objects with likely properties
+      for(const k in window){
+        try {
+          if(!window.hasOwnProperty || !window.hasOwnProperty(k)) continue;
+          const v = window[k];
+          if (!v || typeof v !== 'object') continue;
+          if ('player' in v || 'thePlayer' in v || 'world' in v || typeof v.tick === 'function') candidates.push(v);
+        } catch(e){}
+        if (candidates.length > 60) break;
+      }
+    } catch(e){ console.warn("probe enumerate failed", e); }
+
+    for(let i=0;i<candidates.length;i++){
+      const c = candidates[i];
+      if(!c || typeof c !== 'object') continue;
+      if (('player' in c) || ('world' in c) || typeof c.tick === 'function') {
+        try {
+          // create api and try to wrap tick if we can
+          const api = makeApi(c);
+          tryWrapTick(c, api);
+          console.info("Eagler probe: client object detected and API exported.");
+          return true;
+        } catch(e){ console.warn("makeApi failed", e); }
+      }
     }
-    if (text) el.textContent = text;
-    return el;
-  }
-  function saveLocal(key, value) { localStorage.setItem(PREFIX + key, JSON.stringify(value)); }
-  function loadLocal(key, def = null) { try { const s = localStorage.getItem(PREFIX + key); return s ? JSON.parse(s) : def; } catch { return def; } }
-
-  // --- Event bus for the overlay itself (parent) ---
-  const overlayBus = {
-    tickSubscribers: new Set(),
-    subscribeTick(fn) { this.tickSubscribers.add(fn); return fn; },
-    unsubscribeTick(fn) { this.tickSubscribers.delete(fn); },
-    emitTick(dt) { this.tickSubscribers.forEach(fn => { try { fn(dt); } catch (e) { console.error("overlay tick subscriber error", e); } }); }
-  };
-
-  // Run RAF loop: send a monotonic time and delta
-  let lastRAF = performance.now();
-  function rafLoop(now) {
-    const dt = Math.min(now - lastRAF, 200);
-    lastRAF = now;
-    overlayBus.emitTick(dt);
-    requestAnimationFrame(rafLoop);
-  }
-  requestAnimationFrame(rafLoop);
-
-  // --- HUD container for sandbox-created HUDs ---
-  const hudContainer = q("div", {
-    id: "eagler-hud-container",
-    style: {
-      position: "fixed",
-      left: "0",
-      top: "0",
-      pointerEvents: "none", // HUDs will be non-interactive by default
-      zIndex: PANEL_Z - 1,
-      width: "100%",
-      height: "100%"
-    }
-  });
-  document.body.appendChild(hudContainer);
-
-  // Manage HUD elements created on behalf of sandbox code
-  const hudMap = new Map();
-  function createHUD(id, html, css) {
-    if (!id) id = "hud_" + Math.random().toString(36).slice(2, 9);
-    // sanitize minimal: only allow strings; don't eval CSS
-    if (hudMap.has(id)) {
-      const el = hudMap.get(id);
-      el.innerHTML = html;
-      if (css) Object.assign(el.style, css);
-      return id;
-    }
-    const el = q("div", { style: Object.assign({
-      position: "absolute", left: "8px", top: "8px", pointerEvents: "auto"
-    }, css || {}) });
-    el.innerHTML = html || "";
-    hudContainer.appendChild(el);
-    hudMap.set(id, el);
-    return id;
-  }
-  function updateHUD(id, html, css) {
-    if (!hudMap.has(id)) return false;
-    const el = hudMap.get(id);
-    if (html !== undefined) el.innerHTML = html;
-    if (css) Object.assign(el.style, css);
-    return true;
-  }
-  function removeHUD(id) {
-    if (!hudMap.has(id)) return false;
-    const el = hudMap.get(id);
-    el.remove();
-    hudMap.delete(id);
-    return true;
+    return false;
   }
 
-  // --- UI: floating button + panel with editor + sandbox iframe ---
-  const style = q("style");
-  style.textContent = `
-  #eagler-overlay-root { position: fixed; right: 12px; bottom: 12px; z-index: ${PANEL_Z}; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
-  #eagler-overlay-btn { background:#111; color:#e6e6e6; border-radius:8px; padding:8px 10px; border:none; box-shadow:0 6px 18px rgba(0,0,0,0.5); cursor:pointer; }
-  #eagler-panel { width:480px; max-width: calc(100% - 24px); height:56vh; background: rgba(18,18,20,0.96); color:#ddd; border-radius:10px; padding:10px; box-shadow:0 10px 40px rgba(0,0,0,0.6); margin-bottom:8px; overflow:hidden; display:flex; flex-direction:column; gap:8px; }
-  #eagler-panel .row { display:flex; gap:8px; align-items:center; }
-  #eagler-editor { flex:1; width:100%; min-height:120px; background:#070707; color:#dcdcdc; border:1px solid #222; padding:8px; font-family: monospace; font-size:12px; resize: vertical; overflow:auto; }
-  #eagler-controls { display:flex; gap:6px; }
-  #eagler-log { height:100px; background:#050505; color:#9fd; border:1px solid #222; padding:8px; font-family:monospace; font-size:12px; overflow:auto; }
-  #eagler-sandbox-frame { display:none; width:0; height:0; border:0; }
-  .eagler-btn { background:#1f1f1f; color:#fff; border: none; padding:8px 10px; border-radius:6px; cursor:pointer; }
-  .eagler-btn.warn { background:#6a2a2a; }
-  .eagler-small { font-size:12px; padding:6px 8px; border-radius:6px; }
-  `;
-  document.head.appendChild(style);
+  // Try probing repeatedly for a short window (client may init async)
+  if (!window.__EAGLER_ALLOW_INTERNALS) {
+    console.info("Eagler probe: internals disabled. Set window.__EAGLER_ALLOW_INTERNALS = true before this script to enable.");
+  } else {
+    let tries=0;
+    const maxTries = 40;
+    const t = setInterval(function(){
+      tries++;
+      if (probeForClient() || tries>maxTries){
+        clearInterval(t);
+        if (tries>maxTries) console.warn("Eagler probe: client object not found - Option A (patching build) may be required for deeper access.");
+      }
+    }, 200);
+  }
 
-  const root = q("div", { id: "eagler-overlay-root" });
-  const btn = q("button", { id: "eagler-overlay-btn" }, "☰ Eagler Sandbox");
+  // ---------------- Overlay UI ----------------
+  // Basic floating panel with FPS, API state, player info, tick toggle, FOV slider
+  const root = el('div', { style: { position:'fixed', right:'12px', bottom:'12px', zIndex:999999, fontFamily:'Inter,Arial,Helvetica,sans-serif' }});
+  const btn = el('button', { style:{ background:'#131313', color:'#fff', padding:'8px 10px', borderRadius:'8px', border:'none', cursor:'pointer', boxShadow:'0 6px 18px rgba(0,0,0,0.5)' } }, 'Eagler Dev');
   root.appendChild(btn);
 
-  // Panel (hidden by default)
-  const panel = q("div", { id: "eagler-panel", style: { display: "none" } });
-  const hdr = q("div", { class: "row" });
-  hdr.appendChild(q("div", {}, "Eagler Safe Sandbox"));
-  const closeHint = q("div", { style: { marginLeft: "auto", fontSize: "12px", color: "#999" } }, "Sandboxed — no game internals");
-  hdr.appendChild(closeHint);
+  const panel = el('div', { style:{ display:'none', width:'360px', maxWidth:'calc(100vw - 24px)', background:'rgba(18,18,20,0.96)', color:'#e6e6e6', borderRadius:'10px', padding:'10px', boxShadow:'0 8px 36px rgba(0,0,0,0.6)', marginBottom:'8px', fontSize:'13px' }});
+  const hdr = el('div', {}, 'Eagler Dev Overlay (private)');
+  const status = el('div', { style:{ marginTop:'6px', color:'#9bd' } }, 'API: probing...');
+  const fpsEl = el('div', { style:{ marginTop:'8px' } }, 'FPS: -');
+  const playerEl = el('div', { style:{ marginTop:'6px', whiteSpace:'pre-wrap' } }, 'Player: -');
+  const tickBtn = el('button', { style:{ marginTop:'8px', padding:'6px 8px', borderRadius:'6px', border:'none', cursor:'pointer' } }, 'Subscribe Tick');
+  const unsubBtn = el('button', { style:{ marginLeft:'8px', marginTop:'8px', padding:'6px 8px', borderRadius:'6px', border:'none', cursor:'pointer' } }, 'Unsubscribe');
+  const fovRow = el('div', { style:{ marginTop:'10px', display:'flex', alignItems:'center', gap:'8px' } });
+  const fovLabel = el('div', {}, 'Local FOV:');
+  const fovSlider = el('input', { type:'range', min: '10', max:'170', value: '75', style:{ flex:'1' } });
+  const fovVal = el('div', { style:{ width:'42px', textAlign:'right' } }, '75');
+  fovRow.appendChild(fovLabel); fovRow.appendChild(fovSlider); fovRow.appendChild(fovVal);
+
+  const consoleHint = el('div', { style:{ marginTop:'10px', fontSize:'12px', color:'#9aa' } }, 'Open DevTools console. Use: window.__EAGLER_CLIENT_API (if available)');
+
   panel.appendChild(hdr);
-
-  // Editor area
-  const editor = q("textarea", { id: "eagler-editor", placeholder:
-`// Example (safe): create a simple HUD clock that updates each tick via the sandbox API.
-// API available: request(action, data) -> parent validates
-// Allowed actions: createHUD, updateHUD, removeHUD, saveData, loadData, subscribeTick, log
-// Use send({type:'request', action:'createHUD', payload:{id:'myclock', html:'', css:{}}});
-
-(function init(){
-  // create a HUD
-  send({ type: 'request', action: 'createHUD', payload: { id: 'clock1', html: '<b>clock:</b> --:--:--', css: { left: '12px', top: '12px', color: '#8ef', background: 'rgba(0,0,0,0.4)', padding: '4px 8px', borderRadius:'6px' } } });
-
-  // subscribe to ticks
-  const subId = send({ type: 'request', action: 'subscribeTick' });
-
-  // note: onTick messages come back as events of type 'tick' from parent
-  // you can call updateHUD by sending update requests.
-
-})();` } );
-
-  panel.appendChild(editor);
-
-  // Controls row
-  const controls = q("div", { id: "eagler-controls", class: "row" });
-  const runBtn = q("button", { class: "eagler-btn" }, "Run in Sandbox");
-  const stopBtn = q("button", { class: "eagler-btn warn" }, "Reset Sandbox");
-  const clearLogBtn = q("button", { class: "eagler-btn eagler-small" }, "Clear Log");
-  controls.appendChild(runBtn);
-  controls.appendChild(stopBtn);
-  controls.appendChild(clearLogBtn);
-  panel.appendChild(controls);
-
-  // Log area
-  const logArea = q("div", { id: "eagler-log" }); panel.appendChild(logArea);
-
-  // Hidden sandbox iframe (sandboxed)
-  const frame = q("iframe", { id: "eagler-sandbox-frame", sandbox: "allow-scripts" });
-  // sandbox="allow-scripts" => scripts run, but iframe cannot access parent DOM or cookies, cannot navigate top, cannot make network requests to other origins except what it can fetch inline.
-  panel.appendChild(frame);
+  panel.appendChild(status);
+  panel.appendChild(fpsEl);
+  panel.appendChild(playerEl);
+  panel.appendChild(el('div', { style:{ display:'flex', alignItems:'center', gap:'8px' } }, '') );
+  panel.appendChild(tickBtn);
+  panel.appendChild(unsubBtn);
+  panel.appendChild(fovRow);
+  panel.appendChild(consoleHint);
   root.appendChild(panel);
   document.body.appendChild(root);
 
-  // Toggle panel
-  btn.addEventListener("click", () => {
-    panel.style.display = panel.style.display === "none" ? "flex" : "none";
-  });
+  btn.addEventListener('click', ()=>{ panel.style.display = panel.style.display === 'none' ? 'block' : 'none'; });
 
-  // Logging helper
-  function log(msg, cls) {
-    const line = q("div", {}, (new Date()).toLocaleTimeString() + " — " + msg);
-    if (cls === "err") line.style.color = "#f88";
-    logArea.appendChild(line);
-    logArea.scrollTop = logArea.scrollHeight;
+  // FPS loop for display
+  let last = performance.now();
+  function fpsLoop(now){
+    const dt = now - last; last = now;
+    const fps = Math.round(1000/dt);
+    fpsEl.textContent = 'FPS: '+fps;
+    requestAnimationFrame(fpsLoop);
   }
-  clearLogBtn.addEventListener("click", () => { logArea.innerHTML = ""; });
+  requestAnimationFrame(fpsLoop);
 
-  // --- Sandbox lifecycle and message protocol ---
-  function createSandbox() {
-    // Create a fresh blob URL that holds small runner code for the iframe
-    const iframeHTML = `
-      <!doctype html><html><head><meta charset="utf-8"><title>Sandbox</title></head><body>
-      <script>
-      // Minimal sandbox runner. It exposes a send() function to user code which posts messages up.
-      // All network / parent operations must be done via postMessage; the parent validates them.
-      (function(){
-        // send a message to parent
-        function send(msg) { parent.postMessage(msg, "*"); }
-        // listen for run command and tick events
-        window.addEventListener("message", function(ev){
-          try {
-            const data = ev.data || {};
-            if(data && data.type === "runCode") {
-              // run the code text in this isolated iframe scope
-              try {
-                const userFunc = new Function("send", data.code + "\n//# sourceURL=sandbox-user.js");
-                userFunc(send);
-                parent.postMessage({ type: "log", payload: "User code executed" }, "*");
-              } catch(e) {
-                parent.postMessage({ type: "error", payload: e && e.message ? e.message : String(e) }, "*");
-              }
-            } else if(data && data.type === "tick") {
-              // forward tick events to user code if they provided onTick in global
-              if(typeof window.onSandboxTick === "function") {
-                try { window.onSandboxTick(data.payload); } catch(e){ parent.postMessage({ type:"error", payload: "onSandboxTick error: " + e.message }, "*"); }
-              }
-            }
-          } catch(err) { parent.postMessage({ type: "error", payload: String(err) }, "*"); }
-        }, false);
-
-        // helper: accept messages from parent to set a tick handler
-        // user code may set window.onSandboxTick = function(dt) { ... }
-      })();
-      </script>
-      </body></html>
-    `;
-    const blob = new Blob([iframeHTML], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    frame.src = url;
-    frame.onload = () => {
-      log("Sandbox iframe created");
-    };
-  }
-
-  function destroySandbox() {
-    try {
-      frame.src = "about:blank";
-      log("Sandbox destroyed/reset");
-    } catch (e) { console.warn(e); }
-  }
-
-  // Start with a sandbox ready
-  createSandbox();
-
-  // Handle messages from sandbox iframe
-  window.addEventListener("message", function (ev) {
-    const srcWin = ev.source;
-    if (srcWin !== frame.contentWindow) return; // ignore messages not from our iframe
-    const msg = ev.data || {};
-    if (msg.type === "request") {
-      // A request from sandbox to perform an allowed action
-      const action = msg.action;
-      const payload = msg.payload || {};
-      // Whitelist actions:
-      try {
-        if (action === "createHUD") {
-          const id = createHUD(payload.id, payload.html || "", payload.css || {});
-          ev.source.postMessage({ type: "response", action, success: true, payload: { id } }, "*");
-        } else if (action === "updateHUD") {
-          const ok = updateHUD(payload.id, payload.html, payload.css);
-          ev.source.postMessage({ type: "response", action, success: ok }, "*");
-        } else if (action === "removeHUD") {
-          const ok = removeHUD(payload.id);
-          ev.source.postMessage({ type: "response", action, success: ok }, "*");
-        } else if (action === "saveData") {
-          if (!payload.key) return ev.source.postMessage({ type: "response", action, success: false, error: "missing key" }, "*");
-          saveLocal(payload.key, payload.value);
-          ev.source.postMessage({ type: "response", action, success: true }, "*");
-        } else if (action === "loadData") {
-          if (!payload.key) return ev.source.postMessage({ type: "response", action, success: false, error: "missing key" }, "*");
-          const val = loadLocal(payload.key, null);
-          ev.source.postMessage({ type: "response", action, success: true, payload: { value: val } }, "*");
-        } else if (action === "subscribeTick") {
-          // subscribe this iframe to tick events; we will forward ticks
-          const sub = function(dt) {
-            try { frame.contentWindow.postMessage({ type: "tick", payload: dt }, "*"); }
-            catch(e) { /* ignore */ }
-          };
-          overlayBus.subscribeTick(sub);
-          // store sub fn so we can unsubscribe on reset — attach to frame for lifecycle
-          if (!frame._tickSubs) frame._tickSubs = [];
-          frame._tickSubs.push(sub);
-          ev.source.postMessage({ type: "response", action, success: true }, "*");
-        } else if (action === "log") {
-          log("Sandbox: " + (payload && payload.msg ? payload.msg : JSON.stringify(payload)));
-          ev.source.postMessage({ type: "response", action, success: true }, "*");
-        } else {
-          ev.source.postMessage({ type: "response", action, success: false, error: "unsupported action" }, "*");
-        }
-      } catch (err) {
-        ev.source.postMessage({ type: "response", action, success: false, error: String(err) }, "*");
+  // Periodic API status update & player info refresher
+  let tickSubId = null;
+  function refreshStatus(){
+    const api = window.__EAGLER_CLIENT_API;
+    status.textContent = api ? ('API v' + api.version + ' — ready') : 'API: not found';
+    if(api){
+      const p = safe(()=>api.getPlayerState());
+      if(p){
+        playerEl.textContent = `Player:\n x:${Math.round(p.pos.x||0)} y:${Math.round(p.pos.y||0)} z:${Math.round(p.pos.z||0)}\nHP: ${p.health===null?'?':p.health}`;
+      } else {
+        playerEl.textContent = 'Player: (not available)';
       }
-    } else if (msg.type === "log") {
-      log("Sandbox: " + (msg.payload || ""));
-    } else if (msg.type === "error") {
-      log("Sandbox error: " + (msg.payload || ""), "err");
+    } else {
+      playerEl.textContent = 'Player: (probe in progress or API disabled)';
     }
-  }, false);
+  }
 
-  // Buttons behavior
-  runBtn.addEventListener("click", () => {
-    try {
-      const code = editor.value;
-      // Send the code to the iframe
-      frame.contentWindow.postMessage({ type: "runCode", code }, "*");
-      log("Code sent to sandbox");
-    } catch (e) {
-      log("Failed to run code: " + e.message, "err");
-    }
-  });
-  stopBtn.addEventListener("click", () => {
-    // Unsubscribe tick listeners associated with frame and reset iframe
-    if (frame._tickSubs) frame._tickSubs.forEach(sub => overlayBus.unsubscribeTick(sub));
-    frame._tickSubs = [];
-    destroySandbox();
-    createSandbox();
+  const statusInterval = setInterval(refreshStatus, 750);
+  refreshStatus();
+
+  // Tick subscription management
+  tickBtn.addEventListener('click', ()=> {
+    const api = window.__EAGLER_CLIENT_API;
+    if(!api){ alert('API not available yet. Ensure __EAGLER_ALLOW_INTERNALS = true before this script and reload.'); return; }
+    if (tickSubId) { alert('Already subscribed'); return; }
+    tickSubId = api.subscribeTick(function(dt){
+      // simple example tick handler — update player info more frequently
+      const p = safe(()=>api.getPlayerState());
+      if(p){
+        playerEl.textContent = `Player:\n x:${Math.round(p.pos.x||0)} y:${Math.round(p.pos.y||0)} z:${Math.round(p.pos.z||0)}\nHP: ${p.health===null?'?':p.health}`;
+      }
+    });
+    status.textContent = 'Subscribed to tick (id: ' + tickSubId + ')';
   });
 
-  // Expose a tiny helper for bookmarklet use or console experimentation
-  window.__EAGLER_SAFE_OVERLAY = {
-    createHUD, updateHUD, removeHUD, saveLocal, loadLocal, log, frame
+  unsubBtn.addEventListener('click', ()=> {
+    const api = window.__EAGLER_CLIENT_API;
+    if(api && tickSubId){ api.unsubscribeTick(tickSubId); status.textContent = 'Unsubscribed'; tickSubId = null; }
+    else { status.textContent = 'No active subscription'; }
+  });
+
+  // FOV slider
+  fovSlider.addEventListener('input', ()=> {
+    const api = window.__EAGLER_CLIENT_API;
+    const val = Number(fovSlider.value);
+    fovVal.textContent = String(val);
+    if(!api){ /* apply fallback visual transform directly */ 
+      const canvas = document.querySelector('canvas');
+      if(canvas){ const scale = Math.max(0.6, Math.min(1.6, 75/val)); canvas.style.transformOrigin='50% 50%'; canvas.style.transform='scale('+scale+')'; canvas.dataset.__eagler_fov = String(val); }
+      return;
+    }
+    const ok = safe(()=> api.setLocalFov(val));
+    if(!ok) {
+      // fallback visual transform if API couldn't set
+      const canvas = document.querySelector('canvas');
+      if(canvas){ const scale = Math.max(0.6, Math.min(1.6, 75/val)); canvas.style.transformOrigin='50% 50%'; canvas.style.transform='scale('+scale+')'; canvas.dataset.__eagler_fov = String(val); }
+    }
+  });
+
+  // initial slider value from any existing canvas fallback
+  const canvas = document.querySelector('canvas');
+  if(canvas && canvas.dataset && canvas.dataset.__eagler_fov) { fovSlider.value = canvas.dataset.__eagler_fov; fovVal.textContent = canvas.dataset.__eagler_fov; }
+
+  // small poll to update status if API appears later
+  const poller = setInterval(()=>{ if(window.__EAGLER_CLIENT_API) refreshStatus(); }, 500);
+
+  // cleanup on unload
+  window.addEventListener('beforeunload', ()=>{ try{ clearInterval(statusInterval); clearInterval(poller); }catch(e){} });
+
+  // helpful console alias
+  window.__EAGLER_DEV = {
+    refreshStatus: refreshStatus,
+    showApi: ()=>{ console.log(window.__EAGLER_CLIENT_API || 'API not loaded'); },
+    setFov: (v)=>{ if(window.__EAGLER_CLIENT_API) window.__EAGLER_CLIENT_API.setLocalFov(v); else { const c=document.querySelector('canvas'); if(c){ c.style.transform='scale('+Math.max(0.6,Math.min(1.6,75/v))+')'; } } }
   };
 
-  // Useful hint logged to console
-  console.log("Eagler Safe Sandbox overlay loaded — panel button bottom-right");
-  log("Overlay ready. Click 'Run in Sandbox' to execute editor code (sandboxed).");
-
+  console.log("Eagler probe overlay loaded (private). Set window.__EAGLER_ALLOW_INTERNALS = true before this script to enable deeper probing.");
 })();
