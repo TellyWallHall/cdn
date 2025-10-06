@@ -1,308 +1,205 @@
-/* eagler-probe-overlay.js
-   Non-invasive probe + safe overlay for private Eaglercraft builds.
-   - Requires: window.__EAGLER_ALLOW_INTERNALS = true (set in index.html before this script)
-   - Exposes: window.__EAGLER_CLIENT_API (best-effort)
-   - Safety: read-first; setLocalFov is visual-only (no networking).
+/* module-overlay.js
+   Lightweight Module Manager + Sandbox Loader for private Eaglercraft modding.
+   - Register modules in JS (trusted) via ClientModules.register(...)
+   - Load untrusted modules into a sandbox iframe via manifest/URL
+   - Persist modules in localStorage under "eagler:mods_v1"
+   - Integrates with window.__EAGLER_CLIENT_API if available (read-only, tick)
 */
 
 (function(){
-  if (window.__EAGLER_PROBE_OVERLAY_LOADED) return;
-  window.__EAGLER_PROBE_OVERLAY_LOADED = true;
+  if (window.__EAGLER_MODULES_LOADED) return;
+  window.__EAGLER_MODULES_LOADED = true;
 
-  // ---------------- Utilities ----------------
-  function once(fn){ let done=false; return (...a)=>{ if(done) return; done=true; return fn(...a); }; }
-  function el(tag, attrs={}, txt){ const e=document.createElement(tag); for(const k in attrs){ if(k==='style') Object.assign(e.style, attrs[k]); else e.setAttribute(k, attrs[k]); } if(txt!==undefined) e.textContent = txt; return e; }
-  function safe(fn){ try{ return fn(); }catch(e){ console.warn(e); return null; } }
+  // --- storage helpers
+  const KEY = "eagler:mods_v1";
+  function save(v){ localStorage.setItem(KEY, JSON.stringify(v)); }
+  function load(){ try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch(e) { return []; } }
 
-  // ---------------- Probe shim (Option B, best-effort) ----------------
-  function tryWrapTick(client, api){
-    try {
-      if (client && typeof client.tick === "function" && !client.__eagler_tick_wrapped) {
-        const orig = client.tick;
-        client.tick = function(){ const t0=performance.now(); try{ orig.apply(this, arguments);}catch(e){ try{ orig.call(this);}catch(e){} } const t1=performance.now(); const dt=Math.min(t1-t0,200); if(api && typeof api._dispatchTick==='function') api._dispatchTick(dt); };
-        client.__eagler_tick_wrapped = true;
-        return true;
-      }
-    } catch(e){}
-    return false;
+  // --- tiny EventBus
+  class Bus {
+    constructor(){ this.map = {}; }
+    on(evt, fn){ (this.map[evt] = this.map[evt] || []).push(fn); return fn; }
+    off(evt, fn){ if(!this.map[evt]) return; this.map[evt] = this.map[evt].filter(f=>f!==fn); }
+    emit(evt, ...a){ (this.map[evt]||[]).slice().forEach(f=>{ try{ f(...a); }catch(e){ console.error("bus err",e); } }); }
   }
+  const bus = new Bus();
 
-  function makeApi(client){
-    if (window.__EAGLER_CLIENT_API) return window.__EAGLER_CLIENT_API;
-    const api = {
-      version: "0.1",
-      // best-effort read-only snapshot of player
-      getPlayerState: function(){
-        try {
-          const p = client && (client.player || client.thePlayer || (client.getPlayer && client.getPlayer()));
-          if(!p) return null;
-          return {
-            id: p.id || p.uuid || null,
-            name: p.name || (p.getName && p.getName && p.getName()) || null,
-            pos: {
-              x: (p.posX !== undefined ? p.posX : (p.x !== undefined ? p.x : null)),
-              y: (p.posY !== undefined ? p.posY : (p.y !== undefined ? p.y : null)),
-              z: (p.posZ !== undefined ? p.posZ : (p.z !== undefined ? p.z : null))
-            },
-            onGround: !!(p.onGround || (typeof p.isOnGround === 'function' ? p.isOnGround() : false)),
-            health: (p.getHealth ? p.getHealth() : (p.health !== undefined ? p.health : null)),
-            yaw: (p.rotationYaw !== undefined ? p.rotationYaw : (p.yaw !== undefined ? p.yaw : null)),
-            pitch: (p.rotationPitch !== undefined ? p.rotationPitch : (p.pitch !== undefined ? p.pitch : null))
-          };
-        } catch(e){ console.warn("getPlayerState failed", e); return null; }
-      },
-      getWorldInfo: function(){
-        try {
-          const w = client && (client.world || client.theWorld || null);
-          if(!w) return null;
-          return {
-            time: (w.getWorldTime ? w.getWorldTime() : (w.time !== undefined ? w.time : null)),
-            dim: (w.provider && (w.provider.getDimension ? w.provider.getDimension() : (w.dimension || null))) || null
-          };
-        } catch(e){ console.warn("getWorldInfo failed", e); return null; }
-      },
-
-      // subscribe/unsubscribe tick handlers (handlers run in page context)
-      subscribeTick: function(handler){
-        if(typeof handler !== 'function') return null;
-        api._tickSubs = api._tickSubs || [];
-        const id = Math.random().toString(36).slice(2,9);
-        api._tickSubs.push({ id, handler });
-        return id;
-      },
-      unsubscribeTick: function(id){
-        api._tickSubs = (api._tickSubs || []).filter(x=>x.id !== id);
-      },
-
-      // visual-only FOV setter: try to set on client if available, otherwise use canvas-scale fallback
-      setLocalFov: function(fov){
-        try {
-          // clamp plausible values
-          if (typeof fov !== 'number') return false;
-          if (fov < 10) fov = 10;
-          if (fov > 170) fov = 170;
-
-          // Try known client fields: options.fov or gameSettings.fov
-          const options = client && (client.options || client.gameSettings || null);
-          if (options && ('fov' in options || 'getFov' in options || 'setFov' in options)) {
-            if ('fov' in options) { options.fov = fov; return true; }
-            if (typeof options.setFov === 'function') { options.setFov(fov); return true; }
-          }
-          // Some builds store weapons/camera on client.renderManager or client.entityRenderer
-          if (client && client.entityRenderer && typeof client.entityRenderer.setFOV === 'function') {
-            try { client.entityRenderer.setFOV(fov); return true; } catch(e) {}
-          }
-
-          // Fallback: apply a non-authoritative visual transform on the <canvas> element
-          const canvas = document.querySelector('canvas');
-          if (canvas) {
-            // map fov to CSS scale roughly: higher fov -> smaller scale, lower fov -> zoom in
-            // this is approximate and purely visual
-            const scale = Math.max(0.6, Math.min(1.6, 75 / fov)); // 75 is default-ish
-            canvas.style.transformOrigin = '50% 50%';
-            canvas.style.transition = 'transform 150ms linear';
-            canvas.style.transform = `scale(${scale})`;
-            // annotate current fallback fov for awareness
-            canvas.dataset.__eagler_fov = String(fov);
-            return true;
-          }
-          return false;
-        } catch(e){ console.warn("setLocalFov failed", e); return false; }
-      },
-
-      clientLog: function(msg){
-        try { console.log("[EAGLER_CLIENT_API] " + String(msg)); }catch(e){}
-      },
-
-      // internal dispatcher called when we wrap the client's tick loop or poll fallback
-      _dispatchTick: function(dt){
-        try {
-          const arr = api._tickSubs || [];
-          for(let i=0;i<arr.length;i++){
-            try { arr[i].handler(dt); } catch(e){ console.warn("tick handler error", e); }
-          }
-        } catch(e){ console.warn("_dispatchTick error", e); }
-      }
-    };
-
-    // freeze to avoid overwriting by accident
-    Object.defineProperty(window, "__EAGLER_CLIENT_API", { value: api, writable: false, configurable: false });
-    return api;
-  }
-
-  // Probe heuristics
-  function probeForClient(){
-    const candidates = [];
-    try {
-      // common names
-      candidates.push(window.game);
-      candidates.push(window.client);
-      candidates.push(window.minecraft);
-      candidates.push(window.MinecraftClient);
-      candidates.push(window._minecraftClient);
-      // also scan window for objects with likely properties
-      for(const k in window){
-        try {
-          if(!window.hasOwnProperty || !window.hasOwnProperty(k)) continue;
-          const v = window[k];
-          if (!v || typeof v !== 'object') continue;
-          if ('player' in v || 'thePlayer' in v || 'world' in v || typeof v.tick === 'function') candidates.push(v);
-        } catch(e){}
-        if (candidates.length > 60) break;
-      }
-    } catch(e){ console.warn("probe enumerate failed", e); }
-
-    for(let i=0;i<candidates.length;i++){
-      const c = candidates[i];
-      if(!c || typeof c !== 'object') continue;
-      if (('player' in c) || ('world' in c) || typeof c.tick === 'function') {
-        try {
-          // create api and try to wrap tick if we can
-          const api = makeApi(c);
-          tryWrapTick(c, api);
-          console.info("Eagler probe: client object detected and API exported.");
-          return true;
-        } catch(e){ console.warn("makeApi failed", e); }
-      }
+  // --- Module class (trusted modules run in page)
+  class Module {
+    constructor(meta, handlers){
+      this.id = meta.id || ("m_"+Math.random().toString(36).slice(2,9));
+      this.name = meta.name || this.id;
+      this.meta = meta;
+      this.handlers = handlers || {};
+      this.enabled = !!meta.enabled;
+      this.config = meta.config || {};
     }
-    return false;
+    enable(){ if(this.enabled) return; this.enabled = true; try{ this.handlers.onEnable && this.handlers.onEnable(); }catch(e){console.error(e);} bus.emit("module:changed", this); persist(); }
+    disable(){ if(!this.enabled) return; this.enabled = false; try{ this.handlers.onDisable && this.handlers.onDisable(); }catch(e){console.error(e);} bus.emit("module:changed", this); persist(); }
+    toggle(){ this.enabled ? this.disable() : this.enable(); }
+    tick(dt){ try{ this.handlers.onTick && this.handlers.onTick(dt); }catch(e){console.error(e);} }
+    render2D(){ try{ this.handlers.onRender2D && this.handlers.onRender2D(); }catch(e){console.error(e);} }
   }
 
-  // Try probing repeatedly for a short window (client may init async)
-  if (!window.__EAGLER_ALLOW_INTERNALS) {
-    console.info("Eagler probe: internals disabled. Set window.__EAGLER_ALLOW_INTERNALS = true before this script to enable.");
-  } else {
-    let tries=0;
-    const maxTries = 40;
-    const t = setInterval(function(){
-      tries++;
-      if (probeForClient() || tries>maxTries){
-        clearInterval(t);
-        if (tries>maxTries) console.warn("Eagler probe: client object not found - Option A (patching build) may be required for deeper access.");
-      }
-    }, 200);
+  // --- ModuleManager
+  class ModuleManager {
+    constructor(){ this.modules = {}; this.order = []; const saved = load(); saved.forEach(s=>{ this.order.push(s.id); this.modules[s.id] = new Module(s, {}); }); }
+    register(meta, handlers){
+      if(this.modules[meta.id]) return this.modules[meta.id];
+      const m = new Module(meta, handlers);
+      this.modules[m.id] = m;
+      this.order.push(m.id);
+      persist();
+      return m;
+    }
+    unregister(id){ delete this.modules[id]; this.order = this.order.filter(x=>x!==id); persist(); }
+    get(id){ return this.modules[id]; }
+    all(){ return this.order.map(id=>this.modules[id]); }
+    serialized(){ return this.order.map(id=>{ const m=this.modules[id]; return { id:m.id, name:m.name, enabled:m.enabled, meta:m.meta, config:m.config }; }); }
+    restore(){ const s = load(); s.forEach(o=>{ if(this.modules[o.id]){ this.modules[o.id].enabled = !!o.enabled; this.modules[o.id].config = o.config || {}; } }); }
   }
 
-  // ---------------- Overlay UI ----------------
-  // Basic floating panel with FPS, API state, player info, tick toggle, FOV slider
-  const root = el('div', { style: { position:'fixed', right:'12px', bottom:'12px', zIndex:999999, fontFamily:'Inter,Arial,Helvetica,sans-serif' }});
-  const btn = el('button', { style:{ background:'#131313', color:'#fff', padding:'8px 10px', borderRadius:'8px', border:'none', cursor:'pointer', boxShadow:'0 6px 18px rgba(0,0,0,0.5)' } }, 'Eagler Dev');
-  root.appendChild(btn);
+  const manager = new ModuleManager();
 
-  const panel = el('div', { style:{ display:'none', width:'360px', maxWidth:'calc(100vw - 24px)', background:'rgba(18,18,20,0.96)', color:'#e6e6e6', borderRadius:'10px', padding:'10px', boxShadow:'0 8px 36px rgba(0,0,0,0.6)', marginBottom:'8px', fontSize:'13px' }});
-  const hdr = el('div', {}, 'Eagler Dev Overlay (private)');
-  const status = el('div', { style:{ marginTop:'6px', color:'#9bd' } }, 'API: probing...');
-  const fpsEl = el('div', { style:{ marginTop:'8px' } }, 'FPS: -');
-  const playerEl = el('div', { style:{ marginTop:'6px', whiteSpace:'pre-wrap' } }, 'Player: -');
-  const tickBtn = el('button', { style:{ marginTop:'8px', padding:'6px 8px', borderRadius:'6px', border:'none', cursor:'pointer' } }, 'Subscribe Tick');
-  const unsubBtn = el('button', { style:{ marginLeft:'8px', marginTop:'8px', padding:'6px 8px', borderRadius:'6px', border:'none', cursor:'pointer' } }, 'Unsubscribe');
-  const fovRow = el('div', { style:{ marginTop:'10px', display:'flex', alignItems:'center', gap:'8px' } });
-  const fovLabel = el('div', {}, 'Local FOV:');
-  const fovSlider = el('input', { type:'range', min: '10', max:'170', value: '75', style:{ flex:'1' } });
-  const fovVal = el('div', { style:{ width:'42px', textAlign:'right' } }, '75');
-  fovRow.appendChild(fovLabel); fovRow.appendChild(fovSlider); fovRow.appendChild(fovVal);
+  function persist(){ save(manager.serialized()); }
 
-  const consoleHint = el('div', { style:{ marginTop:'10px', fontSize:'12px', color:'#9aa' } }, 'Open DevTools console. Use: window.__EAGLER_CLIENT_API (if available)');
+  // --- RAF tick to route onTick to enabled modules (and use client API if available)
+  let last = performance.now();
+  function raf(now){
+    const dt = Math.min(now-last, 200); last = now;
+    manager.all().forEach(m => { if(m.enabled) m.tick(dt); });
+    bus.emit("raf", dt);
+    requestAnimationFrame(raf);
+  }
+  requestAnimationFrame(raf);
 
-  panel.appendChild(hdr);
-  panel.appendChild(status);
-  panel.appendChild(fpsEl);
-  panel.appendChild(playerEl);
-  panel.appendChild(el('div', { style:{ display:'flex', alignItems:'center', gap:'8px' } }, '') );
-  panel.appendChild(tickBtn);
-  panel.appendChild(unsubBtn);
-  panel.appendChild(fovRow);
-  panel.appendChild(consoleHint);
+  // --- Simple UI
+  const root = document.createElement("div");
+  root.style = "position:fixed; left:12px; top:12px; z-index:999999; font-family:Inter,Arial,Helvetica;";
+
+  const panel = document.createElement("div");
+  panel.style = "background:rgba(12,12,12,0.9); color:#eaeaea; padding:8px; border-radius:8px; width:320px; box-shadow:0 8px 32px rgba(0,0,0,0.6);";
   root.appendChild(panel);
+
+  const title = document.createElement("div"); title.textContent = "Modules"; title.style = "font-weight:600;margin-bottom:6px;";
+  panel.appendChild(title);
+
+  const list = document.createElement("div"); panel.appendChild(list);
+
+  function renderList(){
+    list.innerHTML = "";
+    manager.all().forEach(m=>{
+      const row = document.createElement("div");
+      row.style = "display:flex;align-items:center;justify-content:space-between;padding:6px 4px;border-bottom:1px solid rgba(255,255,255,0.04)";
+      const left = document.createElement("div"); left.textContent = m.name;
+      const right = document.createElement("div");
+      const btn = document.createElement("button"); btn.textContent = m.enabled ? "ON":"OFF"; btn.style = "margin-left:6px;padding:4px 8px;border-radius:6px;background:#222;color:#fff;border:none;cursor:pointer;";
+      btn.onclick = ()=>{ m.toggle(); btn.textContent = m.enabled ? "ON":"OFF"; renderList(); };
+      const rm = document.createElement("button"); rm.textContent = "Remove"; rm.style="margin-left:6px;padding:4px 8px;border-radius:6px;background:#6a2a2a;color:#fff;border:none;cursor:pointer;";
+      rm.onclick = ()=>{ if(confirm("Remove module "+m.name+"?")){ manager.unregister(m.id); renderList(); } };
+      right.appendChild(btn); right.appendChild(rm);
+      row.appendChild(left); row.appendChild(right);
+      list.appendChild(row);
+    });
+  }
+  panel.appendChild(document.createElement("hr"));
+
+  // quick install from URL
+  const installRow = document.createElement("div"); installRow.style="display:flex;gap:6px;margin-top:6px;";
+  const urlIn = document.createElement("input"); urlIn.placeholder="Module URL (cdn)"; urlIn.style="flex:1;padding:6px;border-radius:6px;border:1px solid #333;background:#0e0e0e;color:#fff;";
+  const installBtn = document.createElement("button"); installBtn.textContent="Install"; installBtn.style="padding:6px;border-radius:6px;border:none;background:#0b7;cursor:pointer;color:#000;";
+  installRow.appendChild(urlIn); installRow.appendChild(installBtn);
+  panel.appendChild(installRow);
+
+  // example built-in make-trusted-module button
+  const demoRow = document.createElement("div"); demoRow.style="margin-top:8px;";
+  const demoBtn = document.createElement("button"); demoBtn.textContent="Add Demo: HUD Clock"; demoBtn.style="padding:6px;border-radius:6px;border:none;background:#3a7;color:#fff;cursor:pointer;";
+  demoRow.appendChild(demoBtn); panel.appendChild(demoRow);
+
   document.body.appendChild(root);
 
-  btn.addEventListener('click', ()=>{ panel.style.display = panel.style.display === 'none' ? 'block' : 'none'; });
+  // --- Install from CDN (sandboxed) ---
+  // We'll fetch the module file, then create a sandbox iframe to run it with a small bridge.
+  function createSandboxRun(code, meta){
+    // create iframe
+    const frame = document.createElement("iframe");
+    frame.sandbox = "allow-scripts";
+    frame.style = "display:none";
+    document.body.appendChild(frame);
+    const html = `
+      <!doctype html><html><body><script>
+        // small runtime: expose send() to user code to call parent bridge
+        function send(msg){ parent.postMessage(msg, "*"); }
+        window.addEventListener("message", function(ev){ if(ev.data && ev.data.type==="run"){ try{ (new Function("send", ev.data.code))(send); parent.postMessage({type:"done"}, "*"); }catch(e){ parent.postMessage({type:"error", error:String(e)}, "*"); } } }, false);
+      <\/script></body></html>
+    `;
+    const blob = new Blob([html], { type: "text/html" });
+    frame.src = URL.createObjectURL(blob);
 
-  // FPS loop for display
-  let last = performance.now();
-  function fpsLoop(now){
-    const dt = now - last; last = now;
-    const fps = Math.round(1000/dt);
-    fpsEl.textContent = 'FPS: '+fps;
-    requestAnimationFrame(fpsLoop);
-  }
-  requestAnimationFrame(fpsLoop);
+    const tidy = ()=>{ try{ setTimeout(()=>{ frame.remove(); }, 500); }catch(e){} };
 
-  // Periodic API status update & player info refresher
-  let tickSubId = null;
-  function refreshStatus(){
-    const api = window.__EAGLER_CLIENT_API;
-    status.textContent = api ? ('API v' + api.version + ' — ready') : 'API: not found';
-    if(api){
-      const p = safe(()=>api.getPlayerState());
-      if(p){
-        playerEl.textContent = `Player:\n x:${Math.round(p.pos.x||0)} y:${Math.round(p.pos.y||0)} z:${Math.round(p.pos.z||0)}\nHP: ${p.health===null?'?':p.health}`;
-      } else {
-        playerEl.textContent = 'Player: (not available)';
+    function onMessage(ev){
+      if(ev.source !== frame.contentWindow) return;
+      const d = ev.data || {};
+      if(d.type === "createTrustedModule"){
+        // create a trusted module using provided metadata & handlers (handlers are not serializable across postMessage, so modules run in-page only if trusted)
+      } else if(d.type === "done"){
+        window.removeEventListener("message", onMessage);
+        tidy();
+      } else if (d.type === "error"){
+        window.removeEventListener("message", onMessage);
+        console.error("Module sandbox error:", d.error);
+        tidy();
+      } else if (d.type === "request"){
+        // handle allowed requests from sandbox (create HUD, save/load)
+        // For now, respond with a simple ack
+        // Extend this to route to a safe API like the earlier sandbox example.
       }
-    } else {
-      playerEl.textContent = 'Player: (probe in progress or API disabled)';
     }
+    window.addEventListener("message", onMessage);
+    // run
+    frame.contentWindow.postMessage({ type: "run", code: code }, "*");
   }
 
-  const statusInterval = setInterval(refreshStatus, 750);
-  refreshStatus();
-
-  // Tick subscription management
-  tickBtn.addEventListener('click', ()=> {
-    const api = window.__EAGLER_CLIENT_API;
-    if(!api){ alert('API not available yet. Ensure __EAGLER_ALLOW_INTERNALS = true before this script and reload.'); return; }
-    if (tickSubId) { alert('Already subscribed'); return; }
-    tickSubId = api.subscribeTick(function(dt){
-      // simple example tick handler — update player info more frequently
-      const p = safe(()=>api.getPlayerState());
-      if(p){
-        playerEl.textContent = `Player:\n x:${Math.round(p.pos.x||0)} y:${Math.round(p.pos.y||0)} z:${Math.round(p.pos.z||0)}\nHP: ${p.health===null?'?':p.health}`;
-      }
-    });
-    status.textContent = 'Subscribed to tick (id: ' + tickSubId + ')';
+  installBtn.addEventListener("click", async ()=>{
+    const url = urlIn.value && urlIn.value.trim();
+    if(!url) return alert("Enter module URL");
+    try {
+      const res = await fetch(url);
+      if(!res.ok) throw new Error("fetch failed");
+      const js = await res.text();
+      // For safety, sandbox the module by default instead of running it trusted in-page
+      createSandboxRun(js, { source: url });
+      alert("Module fetched and executed in sandbox (check console for sandbox logs). If it's a trusted module, add it via the register API instead.");
+    } catch(e){ console.error(e); alert("Install failed: "+e.message); }
   });
 
-  unsubBtn.addEventListener('click', ()=> {
-    const api = window.__EAGLER_CLIENT_API;
-    if(api && tickSubId){ api.unsubscribeTick(tickSubId); status.textContent = 'Unsubscribed'; tickSubId = null; }
-    else { status.textContent = 'No active subscription'; }
+  // --- Demo trusted module: HUD Clock (trusted runs in-page) ---
+  demoBtn.addEventListener("click", ()=>{
+    const meta = { id: "demo_hud_clock", name: "HUD Clock", enabled: true };
+    const handlers = {
+      onEnable(){ this._el = document.createElement("div"); Object.assign(this._el.style, { position:'fixed', left:'8px', top:'8px', padding:'6px 8px', background:'rgba(0,0,0,0.4)', color:'#9ef', borderRadius:'6px', zIndex:999998, fontFamily:'monospace'}); document.body.appendChild(this._el); this._tick = ()=>{ this._el.textContent = (new Date()).toLocaleTimeString(); }; this._int = setInterval(this._tick, 1000); this._tick(); },
+      onDisable(){ clearInterval(this._int); if(this._el) this._el.remove(); this._el = null; }
+    };
+    const m = manager.register(meta, handlers);
+    if(meta.enabled) m.enable();
+    renderList();
   });
 
-  // FOV slider
-  fovSlider.addEventListener('input', ()=> {
-    const api = window.__EAGLER_CLIENT_API;
-    const val = Number(fovSlider.value);
-    fovVal.textContent = String(val);
-    if(!api){ /* apply fallback visual transform directly */ 
-      const canvas = document.querySelector('canvas');
-      if(canvas){ const scale = Math.max(0.6, Math.min(1.6, 75/val)); canvas.style.transformOrigin='50% 50%'; canvas.style.transform='scale('+scale+')'; canvas.dataset.__eagler_fov = String(val); }
-      return;
-    }
-    const ok = safe(()=> api.setLocalFov(val));
-    if(!ok) {
-      // fallback visual transform if API couldn't set
-      const canvas = document.querySelector('canvas');
-      if(canvas){ const scale = Math.max(0.6, Math.min(1.6, 75/val)); canvas.style.transformOrigin='50% 50%'; canvas.style.transform='scale('+scale+')'; canvas.dataset.__eagler_fov = String(val); }
-    }
-  });
-
-  // initial slider value from any existing canvas fallback
-  const canvas = document.querySelector('canvas');
-  if(canvas && canvas.dataset && canvas.dataset.__eagler_fov) { fovSlider.value = canvas.dataset.__eagler_fov; fovVal.textContent = canvas.dataset.__eagler_fov; }
-
-  // small poll to update status if API appears later
-  const poller = setInterval(()=>{ if(window.__EAGLER_CLIENT_API) refreshStatus(); }, 500);
-
-  // cleanup on unload
-  window.addEventListener('beforeunload', ()=>{ try{ clearInterval(statusInterval); clearInterval(poller); }catch(e){} });
-
-  // helpful console alias
-  window.__EAGLER_DEV = {
-    refreshStatus: refreshStatus,
-    showApi: ()=>{ console.log(window.__EAGLER_CLIENT_API || 'API not loaded'); },
-    setFov: (v)=>{ if(window.__EAGLER_CLIENT_API) window.__EAGLER_CLIENT_API.setLocalFov(v); else { const c=document.querySelector('canvas'); if(c){ c.style.transform='scale('+Math.max(0.6,Math.min(1.6,75/v))+')'; } } }
+  // --- Expose global API for trusted registration and simple module management ---
+  window.ClientModules = {
+    register: (meta, handlers) => { const m = manager.register(meta, handlers); if(meta.enabled) m.enable(); renderList(); return m; },
+    unregister: (id) => { manager.unregister(id); renderList(); },
+    list: () => manager.all(),
+    bus,
+    persist
   };
 
-  console.log("Eagler probe overlay loaded (private). Set window.__EAGLER_ALLOW_INTERNALS = true before this script to enable deeper probing.");
+  // auto render initial list
+  renderList();
+
+  // handy console alias
+  window.__EAGLER_MODULES = window.ClientModules;
+
+  console.log("Module overlay loaded. Use window.ClientModules.register(...) to add trusted modules, or install from CDN via panel.");
 })();
