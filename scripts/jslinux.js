@@ -110,8 +110,7 @@ function get_absolute_url(fname)
 {
     var path, p;
     
-    if (fname.indexOf(":") >= 0)
-        return fname;
+    if (/^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(fname)) return fname;
     path = window.location.pathname;
     p = path.lastIndexOf("/");
     if (p < 0)
