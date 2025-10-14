@@ -106,17 +106,21 @@ function get_params()
     return params;
 }
 
-function get_absolute_url(fname)
-{
-    var path, p;
-    
-    if (/^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(fname)) return fname;
-    path = window.location.pathname;
-    p = path.lastIndexOf("/");
+function get_absolute_url(fname) {
+    if (typeof fname !== "string" || !fname.length)
+        return "";
+
+    if (/^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(fname))
+        return fname;
+
+    var path = window.location.pathname;
+    var p = path.lastIndexOf("/");
     if (p < 0)
         return fname;
+
     return window.location.origin + path.slice(0, p + 1) + fname;
 }
+
 
 function GraphicDisplay(parent_el, width, height)
 {
