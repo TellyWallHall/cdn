@@ -98,14 +98,14 @@
         }, 60000); // Check every minute
 
         const firebaseConfig = {
-            apiKey: "AIzaSyA-aYLP7eTUr3vyGqIuFJ1GVE42JjcM1UU",
-            authDomain: "fbchesst.firebaseapp.com",
-            databaseURL: "https://fbchesst-default-rtdb.firebaseio.com",
-            projectId: "fbchesst",
-            storageBucket: "fbchesst.firebasestorage.app",
-            messagingSenderId: "774699466227",
-            appId: "1:774699466227:web:e140d20877c19ec1e9e686",
-            measurementId: "G-1LDBXBT2QD"
+            apiKey: "",
+            authDomain: "",
+            databaseURL: "",
+            projectId: "",
+            storageBucket: "",
+            messagingSenderId: "",
+            appId: "",
+            measurementId: ""
         };
 
         firebase.initializeApp(firebaseConfig);
