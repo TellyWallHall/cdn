@@ -189,7 +189,7 @@ function handleCollision(id, e) {
     onValue(playersRef, (snapshot) => {
       const data = snapshot.val() || {};
       for (const id in data) {
-        if (!players[id] && id !== myId) createPlayer(id, 0xff0000);
+        if (!players[id] && id !== myId) createPlayer(id, 0x88ffff);
         if (players[id] && id !== myId) {
           players[id].body.position.set(data[id].x, data[id].y, data[id].z);
           players[id].mesh.position.copy(players[id].body.position);
