@@ -1,20 +1,3 @@
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-    import { getDatabase, ref, set, onValue, remove, onDisconnect } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
-    
-    const firebaseConfig = {
-      apiKey: "",
-      authDomain: "",
-      databaseURL: ",
-      projectId: "",
-      storageBucket: "",
-      messagingSenderId: "",
-      appId: "",
-      measurementId: ""
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-
     // === GAME SETUP ===
     const canvas = document.getElementById('canvas');
     const scene = new THREE.Scene();
@@ -180,29 +163,6 @@ function handleCollision(id, e) {
 }
 
     createPlayer(myId, 0x00ff00);
-
-    const playerRef = ref(db, `rooms/${roomId}/players/${myId}`);
-    set(playerRef, { x: 0, y: 1, z: 0, state: "idle" });
-    onDisconnect(playerRef).remove();
-
-    const playersRef = ref(db, `rooms/${roomId}/players`);
-    onValue(playersRef, (snapshot) => {
-      const data = snapshot.val() || {};
-      for (const id in data) {
-        if (!players[id] && id !== myId) createPlayer(id, 0x88ffff);
-        if (players[id] && id !== myId) {
-          players[id].body.position.set(data[id].x, data[id].y, data[id].z);
-          players[id].mesh.position.copy(players[id].body.position);
-        }
-      }
-      for (const id in players) {
-        if (!data[id]) {
-          scene.remove(players[id].mesh);
-          world.removeBody(players[id].body);
-          delete players[id];
-        }
-      }
-    });
 
     // === INPUT SYSTEM ===
     const joystick = document.getElementById('joystick');
