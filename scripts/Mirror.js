@@ -19,7 +19,7 @@
         const html = snapshot.val();
         frame.srcdoc = html;
       } else {
-        frame.srcdoc = "<h2>No code found in Firebase</h2>";
+        frame.srcdoc = "<h2>No code found</h2>";
       }
     }
 
