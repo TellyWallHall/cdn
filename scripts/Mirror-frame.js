@@ -1,4 +1,4 @@
-    const _0x4a2b=['QUl6YVN5QS1hWUxQN2VUVXIzdnlHcUl1Rkox','R1ZFNDJKamNNMVVV','ZmJjaGVzc3QuZmlyZWJhc2VhcHAuY29t','aHR0cHM6Ly9mYmNoZXNzdC1kZWZhdWx0','LXJ0ZGIuZmlyZWJhc2Vpby5jb20=','ZmJjaGVzc3Q=','ZmJjaGVzc3QuZmlyZWJhc2VzdG9yYWdlLmFwcA==','Nzc0Njk5NDY2MjI3','MTc3NDY5OTQ2NjIyNzp3ZWI6ZTE0MGQyMDg3N2MxOWVjMWU5ZTY4Ng==','Ry0xTERCWEJUMlFE'];const wemjnonmomo = {apiKey: atob(_0x4a2b[0]) + atob(_0x4a2b[1]),authDomain: atob(_0x4a2b[2]),databaseURL: atob(_0x4a2b[3]) + atob(_0x4a2b[4]),projectId: atob(_0x4a2b[5]),storageBucket: atob(_0x4a2b[6]),messagingSenderId: atob(_0x4a2b[7]),appId: atob(_0x4a2b[8]),measurementId: atob(_0x4a2b[9])};const app = firebase.initializeApp(wemjnonmomo);const db = firebase.database();
+    const wemjnonmomo = {};const app = firebase.initializeApp(wemjnonmomo);const db = firebase.database();
 
     const frame = document.getElementById("mirrorFrame");
     const menuBtn = document.getElementById("menuBtn");
