@@ -4,18 +4,18 @@
       text_color: '#e2e8f0',
       primary_action_color: '#8b5cf6',
       secondary_action_color: '#6366f1',
-      browser_title: 'Jellyfin Browser',
+      browser_title: 'Oasis Browser',
       font_family: 'system-ui, -apple-system, sans-serif',
       font_size: 16
     };
 
-    const jellyfinConfig = {
+    const oasisConfig = {
       serverUrl: 'https://jelly.oasis-archive.org',
       username: 'guest',
       password: 'guest2001'
     };
 
-    let jellyfinClient = null;
+    let oasisClient = null;
     let currentPath = [];
     let currentItems = [];
     let filteredItems = [];
@@ -34,7 +34,7 @@
     const imageCache = new Map();
     
     // Resume playback state (stored in localStorage)
-    const RESUME_KEY = 'jellyfin_resume_state';
+    const RESUME_KEY = 'oasis_resume_state';
 
     async function onConfigChange(config) {
       const appElement = document.getElementById('app');
@@ -116,7 +116,7 @@
       ]);
     }
 
-    class JellyfinClient {
+    class OasisClient {
       constructor(serverUrl, username, password) {
         this.serverUrl = serverUrl;
         this.username = username;
@@ -130,7 +130,7 @@
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Emby-Authorization': `MediaBrowser Client="Jellyfin Browser", Device="Browser", DeviceId="browser-${Date.now()}", Version="1.0.0"`
+            'X-Emby-Authorization': `MediaBrowser Client="Oasis Browser", Device="Browser", DeviceId="browser-${Date.now()}", Version="1.0.0"`
           },
           body: JSON.stringify({
             Username: this.username,
@@ -397,7 +397,7 @@
             for (let i = 0; i < files.length; i++) {
               const item = files[i];
               try {
-                const downloadUrl = jellyfinClient.getStreamUrl(item.Id);
+                const downloadUrl = oasisClient.getStreamUrl(item.Id);
                 const response = await fetch(downloadUrl);
                 
                 if (!response.ok) throw new Error('Download failed');
@@ -459,7 +459,7 @@
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
           try {
-            const url = jellyfinClient.getStreamUrl(file.Id);
+            const url = oasisClient.getStreamUrl(file.Id);
             const response = await fetch(url);
             
             if (!response.ok) throw new Error('Download failed');
@@ -526,7 +526,7 @@
 
     async function getAllItemsRecursive(parentId, items = []) {
       try {
-        const folderItems = await jellyfinClient.getItems(parentId);
+        const folderItems = await oasisClient.getItems(parentId);
         
         for (const item of folderItems) {
           items.push(item);
@@ -614,7 +614,7 @@
     }
 
     // Progress tracking functions
-    const PROGRESS_KEY_PREFIX = 'jellyfin_progress_';
+    const PROGRESS_KEY_PREFIX = 'oasis_progress_';
 
     function saveFileProgress(itemId, currentTime, duration) {
       const percentComplete = (currentTime / duration) * 100;
@@ -716,7 +716,7 @@
       }
       
       const player = document.getElementById('media-player');
-      const streamUrl = jellyfinClient.getStreamUrl(item.Id);
+      const streamUrl = oasisClient.getStreamUrl(item.Id);
       
       player.innerHTML = `
         <div class="rounded-lg overflow-hidden bg-black">
@@ -798,7 +798,7 @@
       }
       
       const player = document.getElementById('media-player');
-      const streamUrl = jellyfinClient.getStreamUrl(item.Id);
+      const streamUrl = oasisClient.getStreamUrl(item.Id);
       
       player.innerHTML = `
         <div class="rounded-lg overflow-hidden p-4 bg-gradient-to-r from-purple-600 to-indigo-600">
@@ -923,7 +923,7 @@
         // Search for the item by ID
         showToast('🔍 Finding your media...');
         
-        const allItems = await jellyfinClient.searchItems(resumeState.itemName);
+        const allItems = await oasisClient.searchItems(resumeState.itemName);
         const item = allItems.find(i => i.Id === resumeState.itemId);
         
         if (!item) {
@@ -947,7 +947,7 @@
 
     async function downloadFile(item) {
       try {
-        const downloadUrl = jellyfinClient.getStreamUrl(item.Id);
+        const downloadUrl = oasisClient.getStreamUrl(item.Id);
         
         // Try File System Access API first
         if (window.showSaveFilePicker) {
@@ -1022,7 +1022,7 @@
           img.className = 'w-16 h-16 object-cover rounded';
           img.alt = item.Name;
           
-          const thumbnailUrl = jellyfinClient.getThumbnailUrl(item.Id);
+          const thumbnailUrl = oasisClient.getThumbnailUrl(item.Id);
           
           // Check cache first
           if (imageCache.has(item.Id)) {
@@ -1186,7 +1186,7 @@
       emptyState.classList.add('hidden');
       
       try {
-        currentItems = await jellyfinClient.getItems(folderId);
+        currentItems = await oasisClient.getItems(folderId);
         
         loading.classList.add('hidden');
         
@@ -1220,7 +1220,7 @@
 
       try {
         const currentFolderId = currentPath.length > 0 ? currentPath[currentPath.length - 1].id : null;
-        currentItems = await jellyfinClient.searchItems(query, currentFolderId);
+        currentItems = await oasisClient.searchItems(query, currentFolderId);
         applyFilterAndSort();
 
         loading.classList.add('hidden');
@@ -1259,13 +1259,13 @@
       const statusDiv = document.getElementById('connection-indicator');
       
       try {
-        jellyfinClient = new JellyfinClient(
-          jellyfinConfig.serverUrl,
-          jellyfinConfig.username,
-          jellyfinConfig.password
+        oasisClient = new OasisClient(
+          oasisConfig.serverUrl,
+          oasisConfig.username,
+          oasisConfig.password
         );
         
-        await jellyfinClient.authenticate();
+        await oasisConfig.authenticate();
         
         statusDiv.innerHTML = `
           <svg class="w-4 h-4 text-green-400" fill="currentColor" viewBox="0 0 20 20">
