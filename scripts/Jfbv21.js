@@ -6,7 +6,7 @@
       secondary_action_color: '#475569',
       font_family: 'system-ui',
       font_size: 15,
-      page_title: 'Jellyfin',
+      page_title: 'Oasis',
       search_placeholder: 'Search files...',
       empty_message: 'No items found'
     };
@@ -41,8 +41,8 @@
 
     function loadFromStorage() {
       try {
-        const history = localStorage.getItem('jellyfin_history');
-        const favorites = localStorage.getItem('jellyfin_favorites');
+        const history = localStorage.getItem('oasis_history');
+        const favorites = localStorage.getItem('oasis_favorites');
         historyData = history ? JSON.parse(history) : [];
         favoritesData = favorites ? JSON.parse(favorites) : [];
       } catch (e) {
@@ -53,14 +53,14 @@
 
     function saveToStorage() {
       try {
-        localStorage.setItem('jellyfin_history', JSON.stringify(historyData));
-        localStorage.setItem('jellyfin_favorites', JSON.stringify(favoritesData));
+        localStorage.setItem('oasis_history', JSON.stringify(historyData));
+        localStorage.setItem('oasis_favorites', JSON.stringify(favoritesData));
       } catch (e) {
         console.error('Failed to save to localStorage');
       }
     }
 
-    async function authenticateJellyfin() {
+    async function authenticateOasis() {
       try {
         const response = await fetch(`https://${serverUrl}/Users/AuthenticateByName`, {
           method: 'POST',
@@ -1124,7 +1124,7 @@
     async function init() {
       loadFromStorage();
       showLoading();
-      const authenticated = await authenticateJellyfin();
+      const authenticated = await authenticateOasis();
       
       if (!authenticated) {
         const config = window.elementSdk?.config || defaultConfig;
@@ -1133,7 +1133,7 @@
             <div>
               <div style="font-size: 48px; margin-bottom: 16px; color: #ef4444;"><i class="fa-solid fa-triangle-exclamation"></i></div>
               <h2 style="font-size: ${config.font_size * 1.3}px; margin-bottom: 8px;">Connection Failed</h2>
-              <p style="font-size: ${config.font_size}px; opacity: 0.7;">Unable to connect to Jellyfin</p>
+              <p style="font-size: ${config.font_size}px; opacity: 0.7;">Unable to connect to Oasis</p>
             </div>
           </div>
         `;
