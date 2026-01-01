@@ -3,7 +3,7 @@
     
     const OASIS_CDN_VERSION = '1.3';
     
-    const UPDATE_DOWNLOAD_URL = 'https://example.com/oasis-update.html';
+    const UPDATE_DOWNLOAD_URL = 'https://drive.google.com/file/d/1pwu7qjk_2kUrGgDbOXqZx7LOILXF30J3/view?usp=drivesdk';
     
     // Check if CDN version is available and compare
     function checkVersionMismatch() {
