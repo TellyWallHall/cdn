@@ -1,0 +1,165 @@
+
+    body {
+      box-sizing: border-box;
+    }
+    * {
+      font-family: 'Outfit', sans-serif;
+    }
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #1a1a2e;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #00d4aa;
+      border-radius: 4px;
+    }
+    .gradient-bg {
+      background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+    }
+    .card-gradient {
+      background: linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%);
+    }
+    .glow-border {
+      box-shadow: 0 0 20px rgba(0, 212, 170, 0.15), inset 0 1px 0 rgba(255,255,255,0.1);
+    }
+    .nav-item.active {
+      background: linear-gradient(135deg, #00d4aa 0%, #00a085 100%);
+      color: #0f0f1a;
+    }
+    .media-card {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .media-card:hover {
+      transform: translateY(-4px) scale(1.02);
+      box-shadow: 0 12px 40px rgba(0, 212, 170, 0.2);
+    }
+    .progress-bar {
+      background: linear-gradient(90deg, #00d4aa 0%, #00f5c4 100%);
+    }
+    .pulse-dot {
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in {
+      animation: fadeIn 0.4s ease-out forwards;
+    }
+    .stagger-1 { animation-delay: 0.1s; opacity: 0; }
+    .stagger-2 { animation-delay: 0.2s; opacity: 0; }
+    .stagger-3 { animation-delay: 0.3s; opacity: 0; }
+    .stagger-4 { animation-delay: 0.4s; opacity: 0; }
+    .login-card {
+      background: rgba(255,255,255,0.05);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .input-field {
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,255,255,0.1);
+      transition: all 0.3s ease;
+    }
+    .input-field:focus {
+      border-color: #00d4aa;
+      box-shadow: 0 0 0 3px rgba(0, 212, 170, 0.2);
+      outline: none;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #00d4aa 0%, #00a085 100%);
+      transition: all 0.3s ease;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(0, 212, 170, 0.4);
+    }
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+    .skeleton {
+      background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+    }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    .tab-active {
+      border-bottom: 2px solid #00d4aa;
+      color: #00d4aa;
+    }
+    .volume-slider {
+      -webkit-appearance: none;
+      height: 4px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 2px;
+    }
+    .volume-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      background: #00d4aa;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    .seek-slider {
+      -webkit-appearance: none;
+      height: 6px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 3px;
+    }
+    .seek-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #00d4aa;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(0, 212, 170, 0.5);
+    }
+    .mini-player {
+      transition: transform 0.3s ease;
+    }
+    .mini-player.expanded {
+      transform: translateY(0);
+    }
+    .mini-player:not(.expanded) {
+      transform: translateY(calc(100% - 70px));
+    }
+    .modal-backdrop {
+      backdrop-filter: blur(10px);
+      animation: fadeIn 0.2s ease-out;
+    }
+    .modal-content {
+      animation: slideUp 0.3s ease-out;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(50px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .queue-item {
+      transition: all 0.2s ease;
+    }
+    .queue-item:hover {
+      background: rgba(255,255,255,0.1);
+    }
+    .breadcrumb-item {
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    .breadcrumb-item:hover {
+      color: #00d4aa;
+    }
+  
+@view-transition { navigation: auto; }
