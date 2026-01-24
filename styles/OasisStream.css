@@ -1,0 +1,80 @@
+
+    * { box-sizing: border-box; }
+    body { font-family: 'Roboto', sans-serif; }
+    
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #0f0f0f; }
+    ::-webkit-scrollbar-thumb { background: #383838; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #484848; }
+    
+    /* Animations */
+    @keyframes pulse-ring {
+      0% { transform: scale(0.8); opacity: 1; }
+      100% { transform: scale(1.4); opacity: 0; }
+    }
+    @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    @keyframes shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+    @keyframes heartPop {
+      0% { transform: translate(-50%, -50%) scale(0); opacity: 1; }
+      50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(1) translateY(-20px); opacity: 0; }
+    }
+    
+    .animate-fade { animation: fade-in 0.3s ease-out; }
+    .animate-slide-up { animation: slide-up 0.3s ease-out; }
+    
+    .skeleton {
+      background: linear-gradient(90deg, #1f1f1f 25%, #2a2a2a 50%, #1f1f1f 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+    }
+    
+    .loader-ring {
+      position: relative;
+    }
+    .loader-ring::before {
+      content: '';
+      position: absolute;
+      inset: -4px;
+      border-radius: 50%;
+      border: 3px solid #ff0000;
+      animation: pulse-ring 1.5s ease-out infinite;
+    }
+    
+    /* Video card hover effects */
+    .video-card { transition: transform 0.2s, box-shadow 0.2s; }
+    .video-card:hover { transform: translateY(-4px); }
+    .video-card:active { transform: scale(0.98); }
+    
+    /* Bottom sheet styling */
+    .bottom-sheet {
+      border-radius: 16px 16px 0 0;
+      max-height: 90%;
+    }
+    
+    /* Progress bar */
+    .progress-bar {
+      transition: width 0.3s ease;
+    }
+    
+    /* Toast notification */
+    .toast {
+      animation: slide-up 0.3s ease-out, fade-in 0.3s ease-out;
+    }
+    
+    /* Video player controls */
+    .player-controls {
+      background: linear-gradient(transparent, rgba(0,0,0,0.9));
+    }
+    
+    /* Safe area padding for mobile */
+    @supports (padding: env(safe-area-inset-bottom)) {
+      .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+    }
+  
+@view-transition { navigation: auto; }
