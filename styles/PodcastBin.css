@@ -1,0 +1,195 @@
+
+    body {
+      box-sizing: border-box;
+    }
+    
+    * {
+      font-family: 'Space Mono', 'Courier Prime', monospace;
+    }
+    
+    .telegram-bg {
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1410 50%, #0a0a0a 100%);
+    }
+    
+    .paper-texture {
+      background: rgba(20, 20, 20, 0.95);
+      background-image: 
+        radial-gradient(ellipse at 20% 30%, rgba(139, 119, 101, 0.15) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 70%, rgba(139, 119, 101, 0.1) 0%, transparent 50%);
+      border: 1px solid rgba(139, 119, 101, 0.3);
+    }
+    
+    .search-input {
+      background: rgba(30, 30, 30, 0.95);
+      border: 2px solid rgba(139, 119, 101, 0.4);
+      color: #d4c5aa;
+      caret-color: #d4c5aa;
+    }
+    
+    .search-input::placeholder {
+      color: rgba(139, 119, 101, 0.6);
+      opacity: 1;
+    }
+    
+    .search-input:focus {
+      outline: none;
+      border-color: #8b7765;
+      box-shadow: 0 0 0 3px rgba(139, 119, 101, 0.2);
+    }
+    
+    .podcast-card {
+      background: rgba(30, 30, 30, 0.9);
+      border: 1px solid rgba(139, 119, 101, 0.3);
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    
+    .podcast-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(139, 119, 101, 0.2);
+      border-color: #8b7765;
+      background: rgba(40, 40, 40, 0.95);
+    }
+    
+    .podcast-artwork {
+      width: 60px;
+      height: 60px;
+      object-fit: cover;
+      border: 1px solid #8b7765;
+    }
+    
+    .episode-card {
+      background: rgba(30, 30, 30, 0.8);
+      border: 1px solid rgba(139, 119, 101, 0.3);
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    
+    .episode-card:hover {
+      background: rgba(40, 40, 40, 0.95);
+      border-color: #8b7765;
+    }
+    
+    .history-tag {
+      background: rgba(139, 119, 101, 0.2);
+      border: 1px solid #8b7765;
+      color: #f4e9d5;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    
+    .history-tag:hover {
+      background: rgba(139, 119, 101, 0.4);
+    }
+    
+    .crumb-link {
+      color: #8b7765;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    
+    .crumb-link:hover {
+      color: #f4e9d5;
+    }
+    
+    .crumb-active {
+      color: #f4e9d5;
+      font-weight: bold;
+    }
+    
+    .loading-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(26, 26, 26, 0.9);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+    }
+    
+    .loading-overlay.active {
+      display: flex;
+    }
+    
+    .telegraph-key {
+      width: 60px;
+      height: 30px;
+      background: #8b7765;
+      border-radius: 4px;
+      animation: telegraph 0.3s ease-in-out infinite;
+    }
+    
+    @keyframes telegraph {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(5px); }
+    }
+    
+    .audio-player {
+      background: linear-gradient(180deg, #1a1410 0%, #0a0a0a 100%);
+      border-top: 2px solid rgba(139, 119, 101, 0.4);
+    }
+    
+    .progress-bar {
+      background: rgba(139, 119, 101, 0.3);
+      cursor: pointer;
+    }
+    
+    .progress-fill {
+      background: linear-gradient(90deg, #8b7765, #a89282);
+      height: 100%;
+      transition: width 0.1s linear;
+    }
+    
+    .control-btn {
+      background: rgba(139, 119, 101, 0.8);
+      color: #0a0a0a;
+      border: none;
+      transition: all 0.2s;
+    }
+    
+    .control-btn:hover {
+      background: #8b7765;
+      transform: scale(1.05);
+    }
+    
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+      color: #a89282;
+    }
+    
+    .empty-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+    
+    .vintage-border {
+      border: 2px solid rgba(139, 119, 101, 0.4);
+      box-shadow: inset 0 0 20px rgba(139, 119, 101, 0.15);
+    }
+    
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: #0a0a0a;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: rgba(139, 119, 101, 0.5);
+      border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+      background: #8b7765;
+    }
+  
