@@ -1,0 +1,177 @@
+
+    body {
+      box-sizing: border-box;
+    }
+    
+    * {
+      -webkit-tap-highlight-color: transparent;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,0.2) transparent;
+    }
+    
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,0.2);
+      border-radius: 2px;
+    }
+    
+    .hide-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    
+    .hide-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    
+    .carousel {
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+    }
+    
+    .carousel-item {
+      scroll-snap-align: start;
+    }
+    
+    .gradient-overlay {
+      background: linear-gradient(to top, rgba(15,15,20,1) 0%, rgba(15,15,20,0.8) 30%, transparent 100%);
+    }
+    
+    .glass {
+      background: rgba(255,255,255,0.05);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+    
+    .shimmer {
+      background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+    }
+    
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 0 20px var(--accent-color, #8b5cf6); }
+      50% { box-shadow: 0 0 40px var(--accent-color, #8b5cf6); }
+    }
+    
+    .pulse-glow {
+      animation: pulse-glow 2s ease-in-out infinite;
+    }
+    
+    @keyframes slide-up {
+      from { transform: translateY(100%); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    
+    .slide-up {
+      animation: slide-up 0.3s ease-out forwards;
+    }
+    
+    @keyframes fade-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    
+    .fade-in {
+      animation: fade-in 0.3s ease-out forwards;
+    }
+    
+    .progress-bar {
+      background: linear-gradient(90deg, var(--accent-color, #8b5cf6), #c084fc);
+    }
+    
+    .waveform {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      height: 40px;
+    }
+    
+    .waveform-bar {
+      width: 3px;
+      background: var(--accent-color, #8b5cf6);
+      border-radius: 2px;
+      animation: waveform-animation 0.5s ease-in-out infinite alternate;
+    }
+    
+    @keyframes waveform-animation {
+      from { height: 20%; }
+      to { height: 100%; }
+    }
+    
+    .tab-indicator {
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    input[type="range"] {
+      -webkit-appearance: none;
+      background: transparent;
+    }
+    
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      height: 12px;
+      width: 12px;
+      border-radius: 50%;
+      background: white;
+      cursor: pointer;
+      margin-top: -4px;
+    }
+    
+    input[type="range"]::-webkit-slider-runnable-track {
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255,255,255,0.2);
+    }
+    
+    .notification-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      min-width: 18px;
+      height: 18px;
+      background: #ef4444;
+      border-radius: 9px;
+      font-size: 10px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 4px;
+    }
+    
+    .media-card {
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .media-card:active {
+      transform: scale(0.95);
+    }
+    
+    .nested-tab-active {
+      color: white;
+      border-bottom: 2px solid var(--accent-color, #8b5cf6);
+    }
+    
+    .folder-item {
+      transition: background 0.15s ease;
+    }
+    
+    .folder-item:active {
+      background: rgba(255,255,255,0.1);
+    }
+  
