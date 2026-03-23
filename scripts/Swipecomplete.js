@@ -612,7 +612,7 @@
       const lastStyleOpen = before.lastIndexOf('<style');
       const lastStyleClose = before.lastIndexOf('</style');
       const lastScriptOpen = before.lastIndexOf('<script');
-      const lastScriptClose = before.lastIndexOf('</script');
+      const lastScriptClose = before.lastIndexOf('<\/script');
 
       if (lastStyleOpen > lastStyleClose && lastStyleOpen !== -1) return 'css';
       if (lastScriptOpen > lastScriptClose && lastScriptOpen !== -1) return 'js';
