@@ -15,7 +15,7 @@ let ai = {
     responseFormat: 'text',
     streamResponse: false,
     systemPrompt: null,
-    baseApiUrl: 'https://cloudflare-cors-anywhere.imnotfamous01.workers.dev/?https://api.cloudflare.com/client/v4/accounts/accountid/ai/run/',
+    baseApiUrl: 'https://corsproxyurl/?https://api.cloudflare.com/client/v4/accounts/accountid/ai/run/',
     apiKey: 'apikey',
     message: null,
     response: null
