@@ -1,0 +1,352 @@
+:root {
+      --screen-bg: #5b7c5b;
+      --shell-bg: #3a3a3a;
+      --border-color: #2a2a2a;
+      --text-color: #9fb982;
+    }
+
+    body {
+      background: #2c2c2c;
+      margin: 0;
+      min-height: 100vh;
+      font-family: 'Courier New', monospace;
+      touch-action: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #gameBoy {
+      background: var(--shell-bg);
+      border-radius: 15px;
+      padding: 7px 15px 15px;
+      width: 95%;
+      max-width: 320px;
+    }
+
+    #screen {
+      background: var(--screen-bg);
+      border: 4px solid var(--border-color);
+      border-radius: 6px;
+      padding: 4px;
+      position: relative;
+      overflow: hidden;
+      touch-action: none; /* Prevents mobile browser swipe gestures */
+    }
+
+    #grid-display {
+      min-height: 302px;
+      min-width: 280px;
+      line-height: 0px;
+      white-space: pre;
+      font-size: 16px;
+      line-height: 20px;
+    }
+
+    #grid-display span {
+      display: inline-block;
+      width: 14px;
+      height: 20px;
+      text-align: center;
+      font-size: 16px;
+    }
+
+    /* UI Layer */
+    #ui-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    /* Controls */
+    #controls {
+      margin-top: 15px;
+    }
+
+    #dpad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0px;
+      width: 120px;
+    }
+
+    .dpad-btn {
+      background: #6b6b6b;
+      border: 3px solid var(--border-color);
+      border-radius: 5px;
+      aspect-ratio: 1;
+      position: relative;
+      padding: 0;
+      cursor: pointer;
+      margin: -1px;
+    }
+
+    .dpad-btn::after {
+      content: "";
+      position: absolute;
+      width: 0;
+      height: 0;
+      border: 6px solid transparent;
+    }
+
+    [data-direction="up"]::after {
+      border-bottom-color: var(--border-color);
+      top: 25%;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    [data-direction="down"]::after {
+      border-top-color: var(--border-color);
+      bottom: 25%;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    [data-direction="left"]::after {
+      border-right-color: var(--border-color);
+      left: 25%;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    [data-direction="right"]::after {
+      border-left-color: var(--border-color);
+      right: 25%;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    .action-btn {
+      background: #8b8b8b;
+      border: 3px solid var(--border-color);
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      font-weight: bold;
+      color: white;
+      cursor: pointer;
+    }
+
+    #btn-a {
+      background: #ff4444;
+    }
+
+    #btn-b {
+      background: #44ff44;
+    }
+
+    .system-btn {
+      background: #6b6b6b;
+      border: 3px solid var(--border-color);
+      border-radius: 3px;
+      padding: 6px 20px;
+      font-size: 0.8em;
+      color: white;
+      cursor: pointer;
+      margin-top: 15px;
+    }
+
+    /* --- UI SYSTEM STYLES --- */
+    #hud-top,
+    #hud-bottom {
+      position: absolute;
+      left: 0;
+      right: 0;
+      background: #111;
+      color: #9fb982;
+      font-size: 12px;
+      padding: 2px 6px;
+      z-index: 5;
+      pointer-events: none;
+      box-sizing: border-box;
+      border: 2px solid #9fb982;
+    }
+
+    #hud-top {
+      top: 0;
+      border-top: none;
+    }
+
+    #hud-bottom {
+      bottom: 0;
+      border-bottom: none;
+    }
+
+    .ui-toast {
+      position: absolute;
+      top: 20%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #fff;
+      color: #000;
+      padding: 6px 12px;
+      border: 3px solid #000;
+      font-size: 14px;
+      font-weight: bold;
+      z-index: 20;
+      pointer-events: none;
+      animation: toastPop 1.5s ease-out forwards;
+    }
+
+    @keyframes toastPop {
+      0% { opacity: 0; transform: translateX(-50%) translateY(10px); }
+      20% { opacity: 1; transform: translateX(-50%) translateY(0); }
+      80% { opacity: 1; }
+      100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+    }
+
+    .ui-dialog-box {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #111;
+      border-top: 4px solid #9fb982;
+      color: #fff;
+      padding: 10px;
+      font-size: 14px;
+      line-height: 1.4;
+      z-index: 15;
+      box-sizing: border-box;
+      min-height: 70px;
+    }
+
+    .ui-dialog-speaker {
+      color: #9fb982;
+      font-weight: bold;
+      margin-bottom: 6px;
+      font-size: 12px;
+      text-transform: uppercase;
+      border-bottom: 2px solid #333;
+      padding-bottom: 2px;
+    }
+
+    .ui-dialog-indicator {
+      position: absolute;
+      bottom: 8px;
+      right: 12px;
+      animation: blink 1s infinite;
+      font-size: 12px;
+      color: #9fb982;
+    }
+
+    .ui-menu-box {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #111;
+      border: 4px solid #9fb982;
+      padding: 15px 20px;
+      z-index: 15;
+      min-width: 60%;
+      text-align: center;
+      box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.5);
+    }
+
+    .ui-menu-title {
+      color: #fff;
+      font-weight: bold;
+      margin-bottom: 10px;
+      border-bottom: 2px solid #333;
+      padding-bottom: 5px;
+      font-size: 16px;
+    }
+
+    .ui-menu-option {
+      color: #555;
+      padding: 5px 0;
+      font-size: 14px;
+      text-align: left;
+    }
+
+    .ui-menu-option.selected {
+      color: #fff;
+    }
+
+    .ui-menu-cursor {
+      margin-right: 5px;
+    }
+
+    /* --- CUTSCENE STYLES --- */
+    .cutscene-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: var(--screen-bg);
+      z-index: 50;
+      display: flex; justify-content: center; align-items: center;
+      text-align: center; padding: 25px; box-sizing: border-box;
+      color: #fff; font-size: 16px; line-height: 1.5;
+    }
+
+    .cutscene-text { max-width: 90%; }
+
+    .cutscene-indicator {
+      position: absolute; bottom: 15px; right: 15px;
+      font-size: 14px; color: #9fb982; animation: blink 1s infinite;
+    }
+
+    .cutscene-progress {
+      width: 20px; height: 20px; border-radius: 50%;
+      background: conic-gradient(#3a3a3a 0deg, #5a5a5a 0deg);
+      display: flex; align-items: center; justify-content: center;
+      position: absolute; bottom: 15px; right: 15px;
+    }
+
+    .cutscene-progress::before {
+      content: ''; width: 14px; height: 14px; border-radius: 50%; background: var(--screen-bg);
+    }
+
+    /* --- VIRTUAL KEYBOARD --- */
+    .ui-keyboard-box {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: #111; border-top: 4px solid #9fb982;
+      padding: 8px; z-index: 15; box-sizing: border-box;
+    }
+
+    .ui-keyboard-prompt { color: #9fb982; font-size: 10px; margin-bottom: 2px; }
+
+    .ui-keyboard-text {
+      color: #fff; font-size: 14px; min-height: 18px;
+      border-bottom: 2px solid #333; padding-bottom: 4px; margin-bottom: 8px; word-break: break-all;
+    }
+
+    .ui-keyboard-text-cursor {
+      display: inline-block; width: 8px; height: 14px;
+      background: #9fb982; animation: blink 0.8s infinite; vertical-align: middle;
+    }
+
+    .ui-keyboard-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; }
+
+    .ui-keyboard-key {
+      background: #333; color: #9fb982; text-align: center;
+      font-size: 11px; padding: 5px 0; border: 1px solid #555;
+    }
+
+    .ui-keyboard-key.selected { background: #9fb982; color: #111; font-weight: bold; }
+
+    .ui-keyboard-key.action { background: #444; color: #fff; grid-column: span 2; }
+    .ui-keyboard-key.action.selected { background: #fff; color: #111; }
+
+    .ui-grid-menu {
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(17, 17, 17, 0.95); z-index: 15;
+    }
+
+    .ui-grid-slot {
+      position: absolute; color: #555; font-size: 14px;
+      padding: 4px 8px; border: 2px solid transparent;
+    }
+
+    .ui-grid-slot.selected {
+      color: #fff; border: 2px solid #9fb982; background: #222; text-shadow: 2px 2px 0 #000;
+    }
+
+    /* --- ANIMATIONS --- */
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
